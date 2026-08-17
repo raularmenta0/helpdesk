@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model areas {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique @db.VarChar(100)
+  departments departments[]
+  tickets     tickets[]
+  users       users[]
+}
+
+model attachments {
+  id          Int       @id @default(autoincrement())
+  ticket_id   Int?
+  file_name   String?   @db.VarChar(255)
+  file_path   String?
+  uploaded_by Int?
+  uploaded_at DateTime? @default(now()) @db.Timestamp(6)
+
+  tickets tickets? @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users   users?   @relation(fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model categories {
+  id      Int       @id @default(autoincrement())
+  name    String    @unique @db.VarChar(100)
+  tickets tickets[]
+}
+
+model department_mapping {
+  old_name String @id
+  new_name String
+}
+
+model departments {
+  id      Int    @id @default(autoincrement())
+  area_id Int?
+  name    String @db.VarChar(100)
+
+  areas   areas?    @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tickets tickets[]
+  users   users[]
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model helpdesk_raw {
+  reloj               String?
+  nombreapellido      String?
+  correo              String?
+  area                String?
+  departamento        String?
+  tiposoporte         String?
+  soporte             String?
+  old_id              String?
+  status              String?
+  descripcionsolucion String?
+  created             String?
+
+  @@ignore
+}
+
+model priorities {
+  id        Int       @id @default(autoincrement())
+  name      String?   @db.VarChar(50)
+  sla_hours Int?
+  tickets   tickets[]
+}
+
+model settings {
+  id    Int     @id @default(autoincrement())
+  key   String? @unique @db.VarChar(100)
+  value String?
+}
+
+model statuses {
+  id      Int       @id @default(autoincrement())
+  name    String?   @db.VarChar(50)
+  tickets tickets[]
+}
+
+model ticket_comments {
+  id         Int       @id @default(autoincrement())
+  ticket_id  Int?
+  user_id    Int?
+  comment    String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  tickets tickets? @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users   users?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model ticket_history {
+  id         Int       @id @default(autoincrement())
+  ticket_id  Int
+  user_id    Int?
+  action     String    @db.VarChar(100)
+  details    String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  tickets tickets @relation(fields: [ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_history_ticket")
+  users   users?  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_history_user")
+}
+
+model tickets {
+  id            Int       @id @default(autoincrement())
+  ticket_number String?   @unique @db.VarChar(20)
+  requester_id  Int?
+  assigned_to   Int?
+  category_id   Int?
+  status_id     Int?
+  priority_id   Int?
+  subject       String?   @db.VarChar(300)
+  description   String?
+  resolution    String?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @db.Timestamp(6)
+  closed_at     DateTime? @db.Timestamp(6)
+  area_id       Int?
+  department_id Int?
+  source        String?   @default("WEB") @db.VarChar(50)
+  legacy_id     Int?
+
+  attachments     attachments[]
+  ticket_comments ticket_comments[]
+  ticket_history  ticket_history[]
+
+  areas                             areas?       @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_tickets_assigned_toTousers  users?       @relation("tickets_assigned_toTousers", fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  categories                        categories?  @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments                       departments? @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  priorities                        priorities?  @relation(fields: [priority_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_tickets_requester_idTousers users?       @relation("tickets_requester_idTousers", fields: [requester_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  statuses                          statuses?    @relation(fields: [status_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  survey ticket_surveys?
+
+  @@index([assigned_to], map: "idx_tickets_assigned")
+  @@index([created_at], map: "idx_tickets_created")
+  @@index([priority_id], map: "idx_tickets_priority")
+  @@index([status_id], map: "idx_tickets_status")
+}
+
+model ticket_surveys {
+  id         Int      @id @default(autoincrement())
+  ticket_id  Int      @unique
+  rating     Int
+  comment    String?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  tickets tickets @relation(fields: [ticket_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model users {
+  id            Int       @id @default(autoincrement())
+  clock_number  String?   @db.VarChar(20)
+  name          String    @db.VarChar(150)
+  email         String?   @db.VarChar(150)
+  area_id       Int?
+  department_id Int?
+  role          String?   @db.VarChar(30)
+  active        Boolean?  @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  user_type     String?   @default("PERSON") @db.VarChar(20)
+
+  attachments     attachments[]
+  ticket_comments ticket_comments[]
+  ticket_history  ticket_history[]
+
+  tickets_tickets_assigned_toTousers  tickets[] @relation("tickets_assigned_toTousers")
+  tickets_tickets_requester_idTousers tickets[] @relation("tickets_requester_idTousers")
+
+  areas       areas?       @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments departments? @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model users_backup {
+  id            Int?
+  clock_number  String?   @db.VarChar(20)
+  name          String?   @db.VarChar(150)
+  email         String?   @db.VarChar(150)
+  area_id       Int?
+  department_id Int?
+  role          String?   @db.VarChar(30)
+  active        Boolean?
+  created_at    DateTime? @db.Timestamp(6)
+  user_type     String?   @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model users_backup_20260721 {
+  id            Int?
+  clock_number  String?   @db.VarChar(20)
+  name          String?   @db.VarChar(150)
+  email         String?   @db.VarChar(150)
+  area_id       Int?
+  department_id String?   @db.VarChar(150)
+  role          String?   @db.VarChar(30)
+  active        Boolean?
+  created_at    DateTime? @db.Timestamp(6)
+  user_type     String?   @db.VarChar(20)
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model users_headcount {
+  clock_number          String? @db.VarChar(20)
+  name                  String? @db.VarChar(255)
+  email                 String? @db.VarChar(255)
+  area                  String? @db.VarChar(100)
+  department            String? @db.VarChar(255)
+  department_normalized String? @db.VarChar(255)
+
+  @@ignore
+}
+
+model tasks {
+  id          Int       @id @default(autoincrement())
+  title       String    @db.VarChar(255)
+  description String?
+  completed   Boolean?  @default(false)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+}
